@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Midjourney Viewer</title>
+<meta name="description" content="An Obsidian plugin that organises your downloaded Midjourney images offline — full prompts from embedded metadata, search, and beautiful galleries in your notes.">
+<link rel="canonical" href="https://www.spencerleeclark.com/midjourney-viewer/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🖼️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #17151d;
+    --surface: #201d28;
+    --surface-2: #282433;
+    --line: #35303f;
+    --text: #ece9e2;
+    --muted: #9a94a8;
+    --accent: #e8b64c;
+    --accent-ink: #1d1608;
+    --chip: #b7a9e8;
+    --chip-bg: #2a2440;
+    --display: "Fraunces", Georgia, serif;
+    --body: "Instrument Sans", system-ui, sans-serif;
+    --mono: "Spline Sans Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- hero ---- */
+  header { padding: 72px 0 40px; }
+  .promptbar {
+    display: flex; align-items: baseline; gap: 14px;
+    font-family: var(--mono); font-size: 15px; color: var(--muted);
+    margin-bottom: 28px;
+  }
+  .promptbar .slash { color: var(--accent); }
+  h1 {
+    font-family: var(--display); font-weight: 600; font-optical-sizing: auto;
+    font-size: clamp(38px, 7vw, 64px); line-height: 1.05;
+    margin: 0 0 20px; text-wrap: balance; letter-spacing: -0.01em;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; padding: 0; list-style: none; }
+  .chips li {
+    font-family: var(--mono); font-size: 13.5px; color: var(--chip);
+    background: var(--chip-bg); border: 1px solid transparent;
+    padding: 3px 11px; border-radius: 999px;
+  }
+  .lede { max-width: 34em; color: var(--muted); font-size: 19px; margin: 0 0 36px; }
+  .lede strong { color: var(--text); font-weight: 600; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-block; text-decoration: none; border-radius: 8px;
+    padding: 12px 22px; font-weight: 600; font-size: 16px;
+    transition: transform .12s ease, background .12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-accent { background: var(--accent); color: var(--accent-ink); }
+  .btn-accent:hover { background: #f2c563; }
+  .btn-ghost { color: var(--text); border: 1px solid var(--line); }
+  .btn-ghost:hover { background: var(--surface); }
+
+  /* ---- demo gallery ---- */
+  .gallery { padding: 24px 0 8px; }
+  .tiles {
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .tile {
+    position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--line);
+  }
+  .tile figcaption {
+    position: absolute; inset: auto 0 0 0;
+    font-family: var(--mono); font-size: 11px; line-height: 1.45;
+    color: #efece6; background: linear-gradient(transparent, rgba(12,10,16,.88) 55%);
+    padding: 26px 10px 8px;
+    opacity: 0; transition: opacity .18s ease;
+  }
+  .tile:hover figcaption, .tile:focus-within figcaption { opacity: 1; }
+  .tile figcaption .p { color: var(--chip); }
+  .t1 { background: url('img/t1.webp') center/cover no-repeat, radial-gradient(120% 90% at 20% 15%, #f0b46a, #b0486a 45%, #241a3f 95%); }
+  .t2 { background: url('img/t2.webp') center/cover no-repeat, radial-gradient(110% 110% at 80% 20%, #9fd8d4, #34708c 50%, #14243a 95%); }
+  .t3 { background: url('img/t3.webp') center/cover no-repeat, radial-gradient(130% 100% at 50% 100%, #d9c98f, #7a6a3c 55%, #241f14 100%); }
+  .t4 { background: url('img/t4.webp') center/cover no-repeat, radial-gradient(120% 100% at 15% 80%, #cf9bd8, #6a4090 55%, #1c1430 100%); }
+  .t5 { background: url('img/t5.webp') center/cover no-repeat, radial-gradient(110% 100% at 70% 70%, #8fc9a0, #2f6a52 55%, #0f231c 100%); }
+  .t6 { background: url('img/t6.webp') center/cover no-repeat, radial-gradient(140% 110% at 40% 0%, #e88a6a, #93402f 50%, #2a1512 100%); }
+  .gallery-note { font-size: 13.5px; color: var(--muted); margin-top: 12px; }
+
+  /* ---- sections ---- */
+  section { padding: 56px 0 8px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 13px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent); margin: 0 0 10px;
+  }
+  h2 {
+    font-family: var(--display); font-weight: 600;
+    font-size: clamp(26px, 4vw, 34px); margin: 0 0 18px; text-wrap: balance;
+  }
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 36px; padding: 0; margin: 24px 0 0; list-style: none; }
+  .features li { padding: 14px 0; border-top: 1px solid var(--line); }
+  .features b { display: block; font-weight: 600; margin-bottom: 4px; }
+  .features span { color: var(--muted); font-size: 15.5px; }
+
+  pre {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto;
+    font-family: var(--mono); font-size: 14px; line-height: 1.6; color: var(--text);
+  }
+  pre .c { color: var(--muted); }
+  pre .k { color: var(--chip); }
+  .steps { counter-reset: step; padding: 0; margin: 20px 0 0; list-style: none; max-width: 40em; }
+  .steps li { counter-increment: step; position: relative; padding: 0 0 18px 44px; }
+  .steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 1px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--surface-2); color: var(--accent);
+    font-family: var(--mono); font-size: 13px;
+    display: grid; place-items: center;
+  }
+  .steps span { color: var(--muted); }
+
+  /* ---- support ---- */
+  .support {
+    margin-top: 56px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 40px 36px;
+  }
+  .support .inner { max-width: 36em; }
+  .support p { color: var(--muted); }
+
+  footer {
+    margin-top: 72px; padding: 28px 0 48px;
+    border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 13.5px;
+  }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: space-between; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="wrap">
+  <p class="promptbar"><span class="slash">/imagine</span> prompt:</p>
+  <h1>Every prompt you ever wrote, back in your hands.</h1>
+  <ul class="chips" aria-label="In the style of Midjourney parameters">
+    <li>--obsidian</li><li>--free</li><li>--open-source</li><li>--v 1.0</li>
+  </ul>
+  <p class="lede"><strong>Midjourney Viewer</strong> is an Obsidian plugin that organises your
+  downloaded Midjourney images <strong>entirely offline</strong> — a searchable gallery with the
+  <strong>full prompt</strong> for every image, and beautiful galleries you can drop straight
+  into your notes. Your images never leave your machine.</p>
+  <div class="cta-row">
+    <a class="btn btn-accent" href="obsidian://show-plugin?id=midjourney-viewer">Install in Obsidian</a>
+    <a class="btn btn-ghost" href="#support">☕ Buy me a coffee</a>
+    <a class="btn btn-ghost" href="https://github.com/spencer1975/obsidian-midjourney-viewer">GitHub</a>
+  </div>
+</header>
+
+<div class="gallery wrap" aria-label="Example gallery">
+  <div class="tiles">
+    <figure class="tile t1"><figcaption>coastal village at dusk, oil paint <span class="p">--ar 1:1 --v 7</span></figcaption></figure>
+    <figure class="tile t2"><figcaption>glacier cave, volumetric light <span class="p">--ar 1:1 --chaos 20</span></figcaption></figure>
+    <figure class="tile t3"><figcaption>brass astrolabe on parchment <span class="p">--style raw</span></figcaption></figure>
+    <figure class="tile t4"><figcaption>portrait of a violinist, neon rim light <span class="p">--niji 6</span></figcaption></figure>
+    <figure class="tile t5"><figcaption>terraced tea fields in fog <span class="p">--ar 1:1 --v 7</span></figcaption></figure>
+    <figure class="tile t6"><figcaption>desert canyon, golden hour <span class="p">--stylize 400</span></figcaption></figure>
+  </div>
+  <p class="gallery-note">Hover a tile — in the plugin, every tile carries its prompt and clickable parameter chips, just like these.</p>
+</div>
+
+<main class="wrap">
+  <section id="features">
+    <p class="eyebrow">What it does</p>
+    <h2>Your library, with its memory intact</h2>
+    <ul class="features">
+      <li><b>Full prompts from PNG metadata</b><span>Midjourney caps filenames at ~100 characters. The plugin reads the complete prompt, parameters, job ID and author from the metadata embedded in each PNG — long prompts survive.</span></li>
+      <li><b>Search that speaks Midjourney</b><span>Phrases, exclusions and parameter queries: <code>"--ar 16:9" city -neon</code>. Terms match across prompt, parameters, filename, job ID and username.</span></li>
+      <li><b>A proper lightbox</b><span>Arrow-key navigation, clickable parameter chips, copy prompt / full command / path, insert into the open note, open externally.</span></li>
+      <li><b>Galleries inside your notes</b><span>Embed grid, masonry, strip, slideshow or random galleries with a code block — built through a dialog with live preview, edited later with one click. No syntax to memorize.</span></li>
+      <li><b>Filename parsing as fallback</b><span>For non-PNG files the parser recovers the prompt, normalizes parameters and extracts the job UUID and variant from the filename.</span></li>
+      <li><b>Fast on big libraries</b><span>Thumbnails render lazily and cache to disk; metadata is read once per file; full-size images stream one at a time, so memory stays flat.</span></li>
+      <li><b>Offline and private</b><span>Everything happens on your machine — no accounts, no uploads, no network requests. Your library stays yours.</span></li>
+    </ul>
+  </section>
+
+  <section id="install">
+    <p class="eyebrow">Install</p>
+    <h2>Three steps to your gallery</h2>
+    <ol class="steps">
+      <li><b>Install the plugin.</b><br><span>Click <a href="obsidian://show-plugin?id=midjourney-viewer">Install in Obsidian</a>, or in Obsidian go to Settings → Community plugins → Browse and search "Midjourney Viewer". (Manual install: the files are on the <a href="https://github.com/spencer1975/obsidian-midjourney-viewer/releases/latest">latest release</a>.)</span></li>
+      <li><b>Point it at your downloads.</b><br><span>In the plugin's settings, set the library folder — a Browse… button is provided.</span></li>
+      <li><b>Open the viewer.</b><br><span>Click the ribbon icon or run <em>Open Midjourney viewer</em>. Press <code>/</code> to search.</span></li>
+    </ol>
+    <pre><span class="c"># embed a gallery in any note</span>
+```midjourney
+<span class="k">folder:</span> portraits
+<span class="k">style:</span> masonry
+<span class="k">match:</span> --niji
+```</pre>
+  </section>
+
+  <section id="support">
+    <div class="support">
+      <div class="inner">
+        <p class="eyebrow">Support</p>
+        <h2>Built nights and weekends, given away free</h2>
+        <p>Midjourney Viewer is free and open source, and always will be. If it has saved
+        you from ever retyping a prompt off a truncated filename, a coffee keeps the
+        updates coming — new features, fixes for whatever Midjourney changes next,
+        and answers to your issues on GitHub.</p>
+        <p><a class="btn btn-accent" href="https://buymeacoffee.com/spencerleeclark">☕ Buy me a coffee</a></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 <a href="https://www.spencerleeclark.com/">Spencer Clark</a> · <a href="https://github.com/spencer1975/obsidian-midjourney-viewer/blob/main/LICENSE">MIT license</a></span>
+    <span>Unofficial community plugin — not affiliated with Midjourney, Inc. or Obsidian.</span>
+  </div>
+</footer>
+
+</body>
+</html>
