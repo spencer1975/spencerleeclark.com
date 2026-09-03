@@ -4,241 +4,411 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Midjourney Viewer</title>
-<meta name="description" content="An Obsidian plugin that organises your downloaded Midjourney images offline — full prompts from embedded metadata, search, and beautiful galleries in your notes.">
+<meta name="description" content="An Obsidian plugin that organises your downloaded Midjourney images offline: full prompts from embedded metadata, search, a lightbox, and beautiful galleries in your notes.">
 <link rel="canonical" href="https://www.spencerleeclark.com/midjourney-viewer/">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🖼️</text></svg>">
+<meta property="og:title" content="Midjourney Viewer for Obsidian">
+<meta property="og:description" content="Every prompt you ever wrote, back in your hands. Offline, free, open source.">
+<meta property="og:url" content="https://www.spencerleeclark.com/midjourney-viewer/">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0f0e14">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
-    --ground: #17151d;
-    --surface: #201d28;
-    --surface-2: #282433;
-    --line: #35303f;
-    --text: #ece9e2;
-    --muted: #9a94a8;
-    --accent: #e8b64c;
-    --accent-ink: #1d1608;
-    --chip: #b7a9e8;
-    --chip-bg: #2a2440;
+    --ground: #0f0e14; --ground-2: #17151d;
+    --surface: rgba(32, 29, 40, .72);
+    --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.16);
+    --text: #f1eee7; --muted: #9a94a8;
+    --accent: #e8b64c; --accent-2: #f2c563; --accent-ink: #1d1608;
+    --chip: #b7a9e8; --chip-bg: rgba(183,169,232,.12);
     --display: "Outfit", "Nunito", system-ui, sans-serif;
     --body: "Nunito", system-ui, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, monospace;
+    --ease: cubic-bezier(.16, 1, .3, 1);
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) {
-    html { scroll-behavior: auto; }
-    * { animation: none !important; transition: none !important; }
-  }
-  body {
-    margin: 0;
-    background: var(--ground);
-    color: var(--text);
-    font-family: var(--body);
-    font-size: 17px;
-    line-height: 1.6;
-  }
+  body { margin: 0; background: var(--ground); color: var(--text); font-family: var(--body); font-size: 17px; line-height: 1.6; overflow-x: hidden; }
   a { color: var(--accent); text-underline-offset: 3px; }
   a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  ::selection { background: var(--accent); color: var(--accent-ink); }
+  .wrap { width: min(1120px, 100% - 48px); margin: 0 auto; }
+  code { font-family: var(--mono); font-size: .86em; color: var(--chip); background: var(--chip-bg); padding: 2px 6px; border-radius: 5px; }
 
-  /* ---- hero ---- */
-  header.wrap { padding-top: 72px; padding-bottom: 40px; }
-  .promptbar {
-    display: flex; align-items: baseline; gap: 14px;
-    font-family: var(--mono); font-size: 15px; color: var(--muted);
-    margin-bottom: 28px;
+  .grain { position: fixed; inset: -50%; width: 200%; height: 200%; pointer-events: none; z-index: 60; opacity: .06; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 1.2s steps(6) infinite; }
+  @keyframes grain { 0% { transform: translate(0,0) } 20% { transform: translate(-3%,2%) } 40% { transform: translate(2%,-4%) } 60% { transform: translate(-4%,-1%) } 80% { transform: translate(3%,3%) } 100% { transform: translate(0,0) } }
+  .glow { position: fixed; left: 0; top: 0; width: 720px; height: 720px; pointer-events: none; z-index: 0; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(232,182,76,.13), rgba(232,182,76,.04) 45%, transparent 70%); will-change: transform; }
+  .cursor, .cursor-ring { display: none; }
+  @media (pointer: fine) {
+    .cursor { display: block; position: fixed; left: 0; top: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); pointer-events: none; z-index: 100; }
+    .cursor-ring { display: block; position: fixed; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(232,182,76,.55); pointer-events: none; z-index: 100; transition: width .25s var(--ease), height .25s var(--ease), background .25s; }
+    body.is-hovering .cursor-ring { width: 56px; height: 56px; background: rgba(232,182,76,.08); }
   }
+
+  nav { position: fixed; top: 0; left: 0; right: 0; z-index: 50; padding: 22px 0; transition: padding .3s var(--ease), background .3s; }
+  nav.scrolled { padding: 12px 0; background: rgba(15,14,20,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .mark { font-family: var(--display); font-weight: 600; font-size: 20px; color: var(--text); text-decoration: none; letter-spacing: -0.01em; }
+  .mark span { color: var(--accent); }
+  nav ul { display: flex; gap: 26px; margin: 0; padding: 0; list-style: none; font-size: 15px; font-weight: 600; }
+  nav ul a { color: var(--muted); text-decoration: none; transition: color .2s; }
+  nav ul a:hover { color: var(--text); }
+
+  .hero { position: relative; min-height: 100svh; display: grid; align-items: center; overflow: hidden; padding: 110px 0 70px; isolation: isolate; }
+  .hero .wrap { position: relative; z-index: 3; }
+  .hero-copy { max-width: 680px; }
+  .promptbar { display: flex; align-items: baseline; gap: 12px; font-family: var(--mono); font-size: 14px; color: var(--muted); margin: 0 0 22px; opacity: 0; animation: fade 1s var(--ease) .1s forwards; }
   .promptbar .slash { color: var(--accent); }
-  h1 {
-    font-family: var(--display); font-weight: 600;
-    font-size: clamp(38px, 7vw, 64px); line-height: 1.05;
-    margin: 0 0 20px; text-wrap: balance; letter-spacing: -0.02em;
-  }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; padding: 0; list-style: none; }
-  .chips li {
-    font-family: var(--mono); font-size: 13.5px; color: var(--chip);
-    background: var(--chip-bg); border: 1px solid transparent;
-    padding: 3px 11px; border-radius: 999px;
-  }
-  .lede { max-width: 34em; color: var(--muted); font-size: 19px; margin: 0 0 36px; }
-  .lede strong { color: var(--text); font-weight: 600; }
-  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-  .btn {
-    display: inline-block; text-decoration: none; border-radius: 8px;
-    padding: 12px 22px; font-weight: 600; font-size: 16px;
-    transition: transform .12s ease, background .12s ease;
-  }
-  .btn:hover { transform: translateY(-1px); }
+  h1 { font-family: var(--display); font-weight: 600; letter-spacing: -0.035em; font-size: clamp(44px, 7.4vw, 94px); line-height: .98; margin: 0 0 24px; text-wrap: balance; }
+  h1 .w { display: inline-block; opacity: 0; transform: translateY(.6em) rotate(2deg); transform-origin: 0 100%; animation: word .9s var(--ease) forwards; }
+  h1 .w.gold { color: var(--accent); }
+  @keyframes word { to { opacity: 1; transform: none; } }
+  @keyframes fade { to { opacity: 1; } }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; padding: 0; list-style: none; opacity: 0; animation: fade 1s var(--ease) .5s forwards; }
+  .chips li { font-family: var(--mono); font-size: 13px; color: var(--chip); background: var(--chip-bg); border: 1px solid rgba(183,169,232,.2); padding: 4px 12px; border-radius: 999px; }
+  .lede { max-width: 32em; color: var(--muted); font-size: clamp(17px, 1.4vw, 20px); margin: 0 0 34px; opacity: 0; animation: fade 1s var(--ease) .6s forwards; }
+  .lede strong { color: var(--text); font-weight: 700; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; opacity: 0; animation: fade 1s var(--ease) .75s forwards; }
+  .btn { position: relative; display: inline-flex; align-items: center; gap: 10px; text-decoration: none; border-radius: 999px; padding: 14px 26px; font-weight: 700; font-size: 16px; will-change: transform; transition: background .2s, color .2s, border-color .2s, box-shadow .3s; }
   .btn-accent { background: var(--accent); color: var(--accent-ink); }
-  .btn-accent:hover { background: #f2c563; }
-  .btn-ghost { color: var(--text); border: 1px solid var(--line); }
-  .btn-ghost:hover { background: var(--surface); }
+  .btn-accent:hover { background: var(--accent-2); box-shadow: 0 10px 40px -10px rgba(232,182,76,.6); }
+  .btn-ghost { color: var(--text); border: 1px solid var(--line-strong); background: rgba(255,255,255,.02); }
+  .btn-ghost:hover { border-color: rgba(255,255,255,.35); background: rgba(255,255,255,.05); }
+  .hero-note { margin-top: 18px; font-size: 13.5px; color: var(--muted); opacity: 0; animation: fade 1s var(--ease) 1s forwards; }
 
-  /* ---- demo gallery ---- */
-  .gallery { padding: 24px 0 8px; }
-  .tiles {
-    display: grid; gap: 10px;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  }
-  .tile {
-    position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden;
-    border: 1px solid var(--line);
-  }
-  .tile figcaption {
-    position: absolute; inset: auto 0 0 0;
-    font-family: var(--mono); font-size: 11px; line-height: 1.45;
-    color: #efece6; background: linear-gradient(transparent, rgba(12,10,16,.88) 55%);
-    padding: 26px 10px 8px;
-    opacity: 0; transition: opacity .18s ease;
-  }
-  .tile:hover figcaption, .tile:focus-within figcaption { opacity: 1; }
+  .wall-scene { position: absolute; inset: 0; z-index: 1; pointer-events: none; perspective: 1400px; perspective-origin: 70% 40%; }
+  .wall { position: absolute; right: -8%; top: -20%; width: 68%; height: 150%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px;
+    transform: rotateX(18deg) rotateY(-16deg) rotateZ(6deg); transform-style: preserve-3d; will-change: transform;
+    -webkit-mask-image: radial-gradient(ellipse 70% 60% at 55% 50%, #000 40%, transparent 80%); mask-image: radial-gradient(ellipse 70% 60% at 55% 50%, #000 40%, transparent 80%); }
+  .col { display: flex; flex-direction: column; gap: 18px; animation: drift 70s linear infinite; pointer-events: auto; }
+  .col:nth-child(2) { animation-duration: 90s; animation-direction: reverse; }
+  .col:nth-child(3) { animation-duration: 62s; }
+  .col:nth-child(4) { animation-duration: 84s; animation-direction: reverse; }
+  .col:hover { animation-play-state: paused; }
+  @keyframes drift { to { transform: translateY(-50%); } }
+  .tile { position: relative; margin: 0; aspect-ratio: 1; border-radius: 14px; overflow: hidden; flex: none; border: 1px solid rgba(255,255,255,.08); background: var(--ground-2);
+    box-shadow: 0 30px 60px -30px rgba(0,0,0,.8); transition: transform .5s var(--ease), border-color .3s, box-shadow .5s; }
+  .tile img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .8s var(--ease), filter .5s; filter: saturate(.9) brightness(.85); }
+  .tile:hover { transform: translateZ(40px) scale(1.04); border-color: rgba(232,182,76,.6); box-shadow: 0 30px 80px -20px rgba(232,182,76,.35); z-index: 2; }
+  .tile:hover img { filter: none; transform: scale(1.06); }
+  .tile figcaption { position: absolute; inset: auto 0 0 0; padding: 30px 12px 10px; font-family: var(--mono); font-size: 11px; line-height: 1.45; color: #efece6;
+    background: linear-gradient(transparent, rgba(8,7,12,.92) 60%); opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s var(--ease); }
   .tile figcaption .p { color: var(--chip); }
-  .t1 { background: url('img/t1.webp') center/cover no-repeat, radial-gradient(120% 90% at 20% 15%, #f0b46a, #b0486a 45%, #241a3f 95%); }
-  .t2 { background: url('img/t2.webp') center/cover no-repeat, radial-gradient(110% 110% at 80% 20%, #9fd8d4, #34708c 50%, #14243a 95%); }
-  .t3 { background: url('img/t3.webp') center/cover no-repeat, radial-gradient(130% 100% at 50% 100%, #d9c98f, #7a6a3c 55%, #241f14 100%); }
-  .t4 { background: url('img/t4.webp') center/cover no-repeat, radial-gradient(120% 100% at 15% 80%, #cf9bd8, #6a4090 55%, #1c1430 100%); }
-  .t5 { background: url('img/t5.webp') center/cover no-repeat, radial-gradient(110% 100% at 70% 70%, #8fc9a0, #2f6a52 55%, #0f231c 100%); }
-  .t6 { background: url('img/t6.webp') center/cover no-repeat, radial-gradient(140% 110% at 40% 0%, #e88a6a, #93402f 50%, #2a1512 100%); }
-  .gallery-note { font-size: 13.5px; color: var(--muted); margin-top: 12px; }
+  .tile:hover figcaption { opacity: 1; transform: none; }
+  .tile.s { width: 78%; }
+  .col:nth-child(odd) .tile.s { align-self: flex-end; }
+  .hero-fade { position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    background: linear-gradient(90deg, var(--ground) 0%, rgba(15,14,20,.92) 28%, rgba(15,14,20,.35) 58%, rgba(15,14,20,.15) 100%), linear-gradient(180deg, var(--ground) 0%, transparent 18%, transparent 78%, var(--ground) 100%); }
 
-  /* ---- sections ---- */
-  section { padding: 56px 0 8px; }
-  .eyebrow {
-    font-family: var(--mono); font-size: 13px; letter-spacing: .14em;
-    text-transform: uppercase; color: var(--accent); margin: 0 0 10px;
-  }
-  h2 {
-    font-family: var(--display); font-weight: 600;
-    font-size: clamp(26px, 4vw, 34px); margin: 0 0 18px; text-wrap: balance;
-  }
-  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 36px; padding: 0; margin: 24px 0 0; list-style: none; }
-  .features li { padding: 14px 0; border-top: 1px solid var(--line); }
-  .features b { display: block; font-weight: 600; margin-bottom: 4px; }
-  .features span { color: var(--muted); font-size: 15.5px; }
+  .ticker { position: relative; z-index: 3; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(255,255,255,.015); overflow: hidden; padding: 14px 0; }
+  .ticker .track { display: flex; gap: 40px; width: max-content; animation: ticker 40s linear infinite; }
+  .ticker:hover .track { animation-play-state: paused; }
+  .ticker span { font-family: var(--mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
+  .ticker span b { color: var(--accent); font-weight: 500; }
+  @keyframes ticker { to { transform: translateX(-50%); } }
 
-  pre {
-    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-    padding: 16px 18px; overflow-x: auto;
-    font-family: var(--mono); font-size: 14px; line-height: 1.6; color: var(--text);
-  }
-  pre .c { color: var(--muted); }
-  pre .k { color: var(--chip); }
-  .steps { counter-reset: step; padding: 0; margin: 20px 0 0; list-style: none; max-width: 40em; }
-  .steps li { counter-increment: step; position: relative; padding: 0 0 18px 44px; }
-  .steps li::before {
-    content: counter(step);
-    position: absolute; left: 0; top: 1px;
-    width: 26px; height: 26px; border-radius: 50%;
-    background: var(--surface-2); color: var(--accent);
-    font-family: var(--mono); font-size: 13px;
-    display: grid; place-items: center;
-  }
-  .steps span { color: var(--muted); }
+  section { position: relative; z-index: 3; padding: 120px 0 40px; }
+  .kicker { font-family: var(--mono); font-size: 13px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin: 0 0 16px; }
+  h2 { font-family: var(--display); font-weight: 600; letter-spacing: -0.03em; font-size: clamp(34px, 4.6vw, 60px); line-height: 1.02; margin: 0 0 22px; text-wrap: balance; }
+  .sub { color: var(--muted); max-width: 36em; font-size: 18px; margin: 0; }
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+  .reveal.in { opacity: 1; transform: none; }
+  .reveal[data-delay="1"] { transition-delay: .1s } .reveal[data-delay="2"] { transition-delay: .2s } .reveal[data-delay="3"] { transition-delay: .3s } .reveal[data-delay="4"] { transition-delay: .4s }
 
-  /* ---- support ---- */
-  .support {
-    margin-top: 56px;
-    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-    padding: 40px 36px;
-  }
-  .support .inner { max-width: 36em; }
-  .support p { color: var(--muted); }
+  .card { position: relative; padding: 28px 26px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); overflow: hidden; transition: transform .5s var(--ease); }
+  .card::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+    background: linear-gradient(140deg, rgba(232,182,76,.7), transparent 40%, transparent 60%, rgba(183,169,232,.5));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: 0; transition: opacity .4s; }
+  .card:hover { transform: translateY(-4px); }
+  .card:hover::before { opacity: 1; }
+  .card .ico { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: rgba(232,182,76,.12); color: var(--accent); margin-bottom: 22px; font-family: var(--mono); font-size: 14px; }
+  .card b { display: block; font-family: var(--display); font-weight: 600; font-size: 21px; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .card span { color: var(--muted); font-size: 15.5px; }
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  .features .card.wide { grid-column: span 2; }
 
-  footer {
-    margin-top: 72px; padding: 28px 0 48px;
-    border-top: 1px solid var(--line);
-    color: var(--muted); font-size: 13.5px;
+  .showcase { display: grid; grid-template-columns: 1fr 1.15fr; gap: 56px; align-items: center; margin-top: 44px; }
+  .app { position: relative; border-radius: 18px; overflow: hidden; background: #1a1822; border: 1px solid var(--line-strong);
+    box-shadow: 0 60px 120px -40px rgba(0,0,0,.9), 0 0 0 1px rgba(0,0,0,.4), 0 0 120px -30px rgba(232,182,76,.25);
+    transform: perspective(1400px) rotateY(6deg) rotateX(2deg); transition: transform 1s var(--ease); }
+  .app:hover { transform: perspective(1400px) rotateY(0) rotateX(0); }
+  .app .bar { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); background: #15131c; }
+  .app .bar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .app .bar i:nth-child(1) { background: #ff5f57 } .app .bar i:nth-child(2) { background: #febc2e } .app .bar i:nth-child(3) { background: #28c840 }
+  .app .bar span { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+  .app .body { display: grid; grid-template-columns: 150px 1fr; min-height: 380px; }
+  .app .side { border-right: 1px solid var(--line); padding: 14px 10px; font-size: 12.5px; color: var(--muted); background: #17151d; }
+  .app .side div { padding: 6px 10px; border-radius: 6px; margin-bottom: 2px; display: flex; gap: 8px; align-items: center; }
+  .app .side div.on { background: rgba(232,182,76,.12); color: var(--text); }
+  .app .side div::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: currentColor; opacity: .5; }
+  .app .main { padding: 14px; }
+  .app .search { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: #0f0e14; font-family: var(--mono); font-size: 12.5px; color: var(--text); margin-bottom: 14px; }
+  .app .search .ph { color: var(--muted); }
+  .caret { display: inline-block; width: 7px; height: 14px; background: var(--accent); vertical-align: -2px; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .app .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .app .grid .tile { border-radius: 10px; transition-duration: .4s; }
+  .app .grid .tile:hover { transform: scale(1.03); }
+  .app .grid .tile img { filter: none; }
+  .app .grid .tile figcaption { font-size: 10.5px; padding: 22px 9px 8px; }
+  .app .badge { position: absolute; right: 16px; bottom: 16px; font-family: var(--mono); font-size: 11px; color: var(--muted); background: rgba(15,14,20,.8); border: 1px solid var(--line); padding: 5px 9px; border-radius: 6px; backdrop-filter: blur(8px); }
+  .queries { margin: 26px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .queries li { display: flex; gap: 14px; align-items: baseline; font-size: 15.5px; color: var(--muted); }
+  .queries code { flex: none; min-width: 11em; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
+  .steps .n { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: .1em; margin-bottom: 36px; }
+  pre { margin: 44px 0 0; background: #0b0a0f; border: 1px solid var(--line-strong); border-radius: 14px; padding: 18px 22px; overflow-x: auto; font-family: var(--mono); font-size: 14px; line-height: 1.65; color: var(--text); box-shadow: 0 30px 60px -30px rgba(0,0,0,.8); }
+  pre .c { color: var(--muted); } pre .k { color: var(--chip); }
+
+  .support { position: relative; overflow: hidden; border-radius: 24px; padding: 64px 56px; background: linear-gradient(135deg, rgba(232,182,76,.14), rgba(183,169,232,.08) 60%, rgba(255,255,255,.02)); border: 1px solid var(--line-strong); }
+  .support::after { content: "☕"; position: absolute; right: -10px; bottom: -40px; font-size: 260px; opacity: .06; transform: rotate(-12deg); pointer-events: none; }
+  .support .inner { max-width: 38em; position: relative; }
+  .support p { color: var(--muted); font-size: 17.5px; }
+
+  footer { position: relative; z-index: 3; margin-top: 120px; padding: 0 0 40px; overflow: hidden; }
+  footer .big { font-family: var(--display); font-weight: 700; letter-spacing: -0.05em; line-height: .85; font-size: clamp(48px, 11.5vw, 170px); margin: 0; white-space: nowrap; text-align: center;
+    background: linear-gradient(180deg, rgba(241,238,231,.35), rgba(241,238,231,0) 92%); -webkit-background-clip: text; background-clip: text; color: transparent; transform: translateY(14%); }
+  footer .row { display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: space-between; color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 22px; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 900px) {
+    .features, .steps { grid-template-columns: 1fr; }
+    .features .card.wide { grid-column: auto; }
+    .showcase { grid-template-columns: 1fr; gap: 40px; }
+    .wall { right: -30%; width: 120%; grid-template-columns: repeat(3, 1fr); top: -10%; }
+    .col:nth-child(4) { display: none; }
+    .hero-fade { background: linear-gradient(180deg, var(--ground) 0%, rgba(15,14,20,.85) 40%, rgba(15,14,20,.75) 100%); }
+    .app { transform: none; } .app .body { grid-template-columns: 1fr; } .app .side { display: none; }
+    .support { padding: 44px 28px; }
+    nav ul { gap: 18px; font-size: 14px; }
   }
-  footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 28px; justify-content: space-between; }
-  footer a { color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .grain, .col, .ticker .track, .caret { animation: none !important; }
+    h1 .w, .promptbar, .chips, .lede, .cta-row, .hero-note { animation: none !important; opacity: 1; transform: none; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .glow, .cursor, .cursor-ring { display: none !important; }
+    .app { transform: none; }
+  }
 </style>
 </head>
 <body>
 
-<header class="wrap">
-  <p class="promptbar"><span class="slash">/imagine</span> prompt:</p>
-  <h1>Every prompt you ever wrote, back in your hands.</h1>
-  <ul class="chips" aria-label="In the style of Midjourney parameters">
-    <li>--obsidian</li><li>--free</li><li>--open-source</li><li>--v 1.0</li>
-  </ul>
-  <p class="lede"><strong>Midjourney Viewer</strong> is an Obsidian plugin that organises your
-  downloaded Midjourney images <strong>entirely offline</strong> — a searchable gallery with the
-  <strong>full prompt</strong> for every image, and beautiful galleries you can drop straight
-  into your notes. Your images never leave your machine.</p>
-  <div class="cta-row">
-    <a class="btn btn-accent" href="obsidian://show-plugin?id=midjourney-viewer">Install in Obsidian</a>
-    <a class="btn btn-ghost" href="#support">☕ Buy me a coffee</a>
-    <a class="btn btn-ghost" href="https://github.com/spencer1975/obsidian-midjourney-viewer">GitHub</a>
+<div class="grain" aria-hidden="true"></div>
+<div class="glow" aria-hidden="true"></div>
+<div class="cursor" aria-hidden="true"></div>
+<div class="cursor-ring" aria-hidden="true"></div>
+
+<nav id="nav">
+  <div class="wrap">
+    <a class="mark" href="https://www.spencerleeclark.com/">Spencer<span>.</span>Clark</a>
+    <ul>
+      <li><a href="#features" data-hover>Features</a></li>
+      <li><a href="#install" data-hover>Install</a></li>
+      <li><a href="https://github.com/spencer1975/obsidian-midjourney-viewer" data-hover>GitHub</a></li>
+      <li><a href="#support" data-hover>Support</a></li>
+    </ul>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wall-scene" aria-hidden="true"><div class="wall" id="wall"></div></div>
+  <div class="hero-fade" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="hero-copy">
+      <p class="promptbar"><span class="slash">/imagine</span> prompt:</p>
+      <h1 id="headline">Every prompt you ever wrote, back in your hands.</h1>
+      <ul class="chips" aria-label="In the style of Midjourney parameters">
+        <li>--obsidian</li><li>--free</li><li>--open-source</li><li>--offline</li><li>--v 1.0</li>
+      </ul>
+      <p class="lede"><strong>Midjourney Viewer</strong> is an Obsidian plugin that organises your downloaded
+      Midjourney images <strong>entirely offline</strong>: a searchable gallery with the <strong>full prompt</strong>
+      for every image, and beautiful galleries you can drop straight into your notes. Your images never leave your machine.</p>
+      <div class="cta-row">
+        <a class="btn btn-accent" href="obsidian://show-plugin?id=midjourney-viewer" data-magnet data-hover>Install in Obsidian</a>
+        <a class="btn btn-ghost" href="#support" data-magnet data-hover>☕ Buy me a coffee</a>
+        <a class="btn btn-ghost" href="https://github.com/spencer1975/obsidian-midjourney-viewer" data-magnet data-hover>GitHub</a>
+      </div>
+      <p class="hero-note">Hover the wall: every tile carries its prompt and parameters, just like in the plugin.</p>
+    </div>
   </div>
 </header>
 
-<div class="gallery wrap" aria-label="Example gallery">
-  <div class="tiles">
-    <figure class="tile t1"><figcaption>coastal village at dusk, oil paint <span class="p">--ar 1:1 --v 7</span></figcaption></figure>
-    <figure class="tile t2"><figcaption>glacier cave, volumetric light <span class="p">--ar 1:1 --chaos 20</span></figcaption></figure>
-    <figure class="tile t3"><figcaption>brass astrolabe on parchment <span class="p">--style raw</span></figcaption></figure>
-    <figure class="tile t4"><figcaption>portrait of a violinist, neon rim light <span class="p">--niji 6</span></figcaption></figure>
-    <figure class="tile t5"><figcaption>terraced tea fields in fog <span class="p">--ar 1:1 --v 7</span></figcaption></figure>
-    <figure class="tile t6"><figcaption>desert canyon, golden hour <span class="p">--stylize 400</span></figcaption></figure>
+<div class="ticker" aria-hidden="true">
+  <div class="track" id="ticker">
+    <span><b>--full-prompts</b> read from PNG metadata</span><span><b>--search</b> phrases, exclusions, parameters</span><span><b>--lightbox</b> arrow keys, copy, insert</span>
+    <span><b>--galleries</b> grid · masonry · strip · slideshow</span><span><b>--offline</b> no accounts, no uploads</span><span><b>--fast</b> lazy thumbnails, cached metadata</span>
+    <span><b>--free</b> MIT licensed</span>
   </div>
-  <p class="gallery-note">Hover a tile — in the plugin, every tile carries its prompt and clickable parameter chips, just like these.</p>
 </div>
 
-<main class="wrap">
+<main>
   <section id="features">
-    <p class="eyebrow">What it does</p>
-    <h2>Your library, with its memory intact</h2>
-    <ul class="features">
-      <li><b>Full prompts from PNG metadata</b><span>Midjourney caps filenames at ~100 characters. The plugin reads the complete prompt, parameters, job ID and author from the metadata embedded in each PNG — long prompts survive.</span></li>
-      <li><b>Search that speaks Midjourney</b><span>Phrases, exclusions and parameter queries: <code>"--ar 16:9" city -neon</code>. Terms match across prompt, parameters, filename, job ID and username.</span></li>
-      <li><b>A proper lightbox</b><span>Arrow-key navigation, clickable parameter chips, copy prompt / full command / path, insert into the open note, open externally.</span></li>
-      <li><b>Galleries inside your notes</b><span>Embed grid, masonry, strip, slideshow or random galleries with a code block — built through a dialog with live preview, edited later with one click. No syntax to memorize.</span></li>
-      <li><b>Filename parsing as fallback</b><span>For non-PNG files the parser recovers the prompt, normalizes parameters and extracts the job UUID and variant from the filename.</span></li>
-      <li><b>Fast on big libraries</b><span>Thumbnails render lazily and cache to disk; metadata is read once per file; full-size images stream one at a time, so memory stays flat.</span></li>
-      <li><b>Offline and private</b><span>Everything happens on your machine — no accounts, no uploads, no network requests. Your library stays yours.</span></li>
-    </ul>
+    <div class="wrap">
+      <p class="kicker reveal">What it does</p>
+      <h2 class="reveal" data-delay="1">Your library, with its memory intact</h2>
+      <p class="sub reveal" data-delay="2">Midjourney caps filenames at about 100 characters. Long prompts get cut off, parameters vanish, and a folder of downloads becomes a folder of mysteries. The plugin reads what the image itself remembers.</p>
+      <div class="features">
+        <div class="card wide reveal" data-delay="1"><div class="ico">PNG</div><b>Full prompts from PNG metadata</b><span>The complete prompt, parameters, job ID and author are read from the metadata embedded in each PNG. Long prompts survive, exactly as you wrote them.</span></div>
+        <div class="card reveal" data-delay="2"><div class="ico">/</div><b>Search that speaks Midjourney</b><span>Phrases, exclusions and parameter queries: <code>"--ar 16:9" city -neon</code>. Terms match across prompt, parameters, filename, job ID and username.</span></div>
+        <div class="card reveal" data-delay="1"><div class="ico">⤢</div><b>A proper lightbox</b><span>Arrow-key navigation, clickable parameter chips, copy prompt / full command / path, insert into the open note, open externally.</span></div>
+        <div class="card wide reveal" data-delay="2"><div class="ico">```</div><b>Galleries inside your notes</b><span>Embed grid, masonry, strip, slideshow or random galleries with a code block, built through a dialog with live preview and edited later with one click. No syntax to memorise.</span></div>
+        <div class="card reveal" data-delay="1"><div class="ico">ab</div><b>Filename parsing as fallback</b><span>For non-PNG files the parser recovers the prompt, normalises parameters and extracts the job UUID and variant from the filename.</span></div>
+        <div class="card reveal" data-delay="2"><div class="ico">⚡</div><b>Fast on big libraries</b><span>Thumbnails render lazily and cache to disk; metadata is read once per file; full-size images stream one at a time, so memory stays flat.</span></div>
+        <div class="card reveal" data-delay="3"><div class="ico">🔒</div><b>Offline and private</b><span>Everything happens on your machine. No accounts, no uploads, no network requests. Your library stays yours.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="search">
+    <div class="wrap">
+      <p class="kicker reveal">Search</p>
+      <h2 class="reveal" data-delay="1">Ask for images the way you asked for them</h2>
+      <div class="showcase">
+        <!-- TODO: replace this CSS mock with a real capture of the plugin (screenshot or GIF) when available -->
+        <div class="app reveal" data-delay="1" aria-label="Midjourney Viewer inside Obsidian (illustration)">
+          <div class="bar"><i></i><i></i><i></i><span>Midjourney viewer</span></div>
+          <div class="body">
+            <div class="side"><div class="on">All images</div><div>portraits</div><div>landscapes</div><div>objects</div><div>niji</div></div>
+            <div class="main">
+              <div class="search"><span class="ph">/</span><span id="appTyped"></span><span class="caret"></span></div>
+              <div class="grid" id="appGrid"></div>
+            </div>
+          </div>
+          <div class="badge" id="appBadge">6 images · 6 prompts</div>
+        </div>
+        <div class="reveal" data-delay="2">
+          <p class="sub">Terms are ANDed across prompt, parameters, filename, job ID and username. Press <code>/</code> to focus the search box, <code>Esc</code> to clear it. Parameter chips in the lightbox are clickable and search for that parameter.</p>
+          <ul class="queries">
+            <li><code>neon city</code><span>contains both words</span></li>
+            <li><code>"old fisherman"</code><span>exact phrase</span></li>
+            <li><code>city -neon</code><span>has city, not neon</span></li>
+            <li><code>--niji</code><span>has the niji parameter</span></li>
+            <li><code>"--ar 16:9"</code><span>that exact aspect ratio</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section id="install">
-    <p class="eyebrow">Install</p>
-    <h2>Three steps to your gallery</h2>
-    <ol class="steps">
-      <li><b>Install the plugin.</b><br><span>Click <a href="obsidian://show-plugin?id=midjourney-viewer">Install in Obsidian</a>, or in Obsidian go to Settings → Community plugins → Browse and search "Midjourney Viewer". (Manual install: the files are on the <a href="https://github.com/spencer1975/obsidian-midjourney-viewer/releases/latest">latest release</a>.)</span></li>
-      <li><b>Point it at your downloads.</b><br><span>In the plugin's settings, set the library folder — a Browse… button is provided.</span></li>
-      <li><b>Open the viewer.</b><br><span>Click the ribbon icon or run <em>Open Midjourney viewer</em>. Press <code>/</code> to search.</span></li>
-    </ol>
-    <pre><span class="c"># embed a gallery in any note</span>
+    <div class="wrap">
+      <p class="kicker reveal">Install</p>
+      <h2 class="reveal" data-delay="1">Three steps to your gallery</h2>
+      <div class="steps">
+        <div class="card reveal" data-delay="1"><div class="n">01</div><b>Install the plugin</b><span>Click <a href="obsidian://show-plugin?id=midjourney-viewer">Install in Obsidian</a>, or go to Settings → Community plugins → Browse and search “Midjourney Viewer”. Manual install: files on the <a href="https://github.com/spencer1975/obsidian-midjourney-viewer/releases/latest">latest release</a>.</span></div>
+        <div class="card reveal" data-delay="2"><div class="n">02</div><b>Point it at your downloads</b><span>In the plugin's settings, set the library folder. A Browse… button is provided. Thumbnails and prompts are indexed once and cached.</span></div>
+        <div class="card reveal" data-delay="3"><div class="n">03</div><b>Open the viewer</b><span>Click the ribbon icon or run <em>Open Midjourney viewer</em>. Press <code>/</code> to search. Right-click the ribbon icon to insert a gallery embed.</span></div>
+      </div>
+      <pre class="reveal" data-delay="2"><span class="c"># embed a gallery in any note (the dialog writes this for you)</span>
 ```midjourney
 <span class="k">folder:</span> portraits
 <span class="k">style:</span> masonry
 <span class="k">match:</span> --niji
 ```</pre>
+    </div>
   </section>
 
   <section id="support">
-    <div class="support">
-      <div class="inner">
-        <p class="eyebrow">Support</p>
-        <h2>Built nights and weekends, given away free</h2>
-        <p>Midjourney Viewer is free and open source, and always will be. If it has saved
-        you from ever retyping a prompt off a truncated filename, a coffee keeps the
-        updates coming — new features, fixes for whatever Midjourney changes next,
-        and answers to your issues on GitHub.</p>
-        <p><a class="btn btn-accent" href="https://buymeacoffee.com/spencerleeclark">☕ Buy me a coffee</a></p>
+    <div class="wrap">
+      <div class="support reveal">
+        <div class="inner">
+          <p class="kicker">Support</p>
+          <h2>Built nights and weekends, given away free</h2>
+          <p>Midjourney Viewer is free and open source, and always will be. If it has saved you from ever
+          retyping a prompt off a truncated filename, a coffee keeps the updates coming: new features, fixes
+          for whatever Midjourney changes next, and answers to your issues on GitHub.</p>
+          <p><a class="btn btn-accent" href="https://buymeacoffee.com/spencerleeclark" data-magnet data-hover>☕ Buy me a coffee</a></p>
+        </div>
       </div>
     </div>
   </section>
 </main>
 
 <footer>
+  <p class="big" aria-hidden="true">Midjourney Viewer</p>
   <div class="wrap">
-    <span>© 2026 <a href="https://www.spencerleeclark.com/">Spencer Clark</a> · <a href="https://github.com/spencer1975/obsidian-midjourney-viewer/blob/main/LICENSE">MIT license</a></span>
-    <span>Unofficial community plugin — not affiliated with Midjourney, Inc. or Obsidian.</span>
+    <div class="row">
+      <span>© 2026 <a href="https://www.spencerleeclark.com/" data-hover>Spencer Clark</a> · <a href="https://github.com/spencer1975/obsidian-midjourney-viewer/blob/main/LICENSE" data-hover>MIT license</a></span>
+      <span>Unofficial community plugin, not affiliated with Midjourney, Inc. or Obsidian.</span>
+    </div>
   </div>
 </footer>
 
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fine = matchMedia('(pointer: fine)').matches;
+  // TODO: swap these generated demo tiles for real library captures when available
+  const TILES = [
+    { src: 'img/t1.webp', prompt: 'coastal village at dusk, oil paint', params: '--ar 1:1 --v 7' },
+    { src: 'img/t2.webp', prompt: 'glacier cave, volumetric light', params: '--ar 1:1 --chaos 20' },
+    { src: 'img/t3.webp', prompt: 'brass astrolabe on parchment', params: '--style raw' },
+    { src: 'img/t4.webp', prompt: 'portrait of a violinist, neon rim light', params: '--niji 6' },
+    { src: 'img/t5.webp', prompt: 'terraced tea fields in fog', params: '--ar 1:1 --v 7' },
+    { src: 'img/t6.webp', prompt: 'desert canyon, golden hour', params: '--stylize 400' },
+  ];
+  const tileHTML = (t, small, lazy) => `<figure class="tile${small ? ' s' : ''}"><img src="${t.src}" alt="" loading="${lazy ? 'lazy' : 'eager'}" decoding="async"><figcaption>${t.prompt} <span class="p">${t.params}</span></figcaption></figure>`;
+  const wall = document.getElementById('wall');
+  for (let c = 0; c < 4; c++) {
+    const col = document.createElement('div'); col.className = 'col';
+    const order = TILES.slice(c).concat(TILES.slice(0, c)); const seq = order.concat(order);
+    col.innerHTML = seq.map((t, i) => tileHTML(t, (i + c) % 3 === 1)).join('');
+    wall.appendChild(col);
+  }
+  document.getElementById('appGrid').innerHTML = TILES.map(t => tileHTML(t, false, true)).join('');
+
+  const h = document.getElementById('headline'); const gold = new Set(['prompt']);
+  h.innerHTML = h.textContent.split(' ').map((w, i) => `<span class="w${gold.has(w) ? ' gold' : ''}" style="animation-delay:${.08 + i * .07}s">${w}</span>`).join(' ');
+
+  const glow = document.querySelector('.glow'), cur = document.querySelector('.cursor'), ring = document.querySelector('.cursor-ring');
+  let mx = innerWidth / 2, my = innerHeight / 2, gx = mx, gy = my, rx = mx, ry = my, wx = 0, wy = 0;
+  addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; });
+  const lerp = (a, b, t) => a + (b - a) * t;
+  (function loop() {
+    gx = lerp(gx, mx, .06); gy = lerp(gy, my, .06);
+    glow.style.transform = `translate(${gx - 360}px, ${gy - 360}px)`;
+    if (fine && cur) { cur.style.transform = `translate(${mx - 3}px, ${my - 3}px)`; rx = lerp(rx, mx, .18); ry = lerp(ry, my, .18); ring.style.transform = `translate(${rx - 17}px, ${ry - 17}px)`; }
+    if (!reduce) {
+      const tx = (mx / innerWidth - .5), ty = (my / innerHeight - .5); wx = lerp(wx, tx, .04); wy = lerp(wy, ty, .04);
+      wall.style.transform = `rotateX(${18 + wy * -6}deg) rotateY(${-16 + wx * 8}deg) rotateZ(6deg) translate3d(${wx * -30}px, ${wy * -20}px, 0)`;
+    }
+    requestAnimationFrame(loop);
+  })();
+  document.querySelectorAll('[data-hover]').forEach(el => {
+    el.addEventListener('pointerenter', () => document.body.classList.add('is-hovering'));
+    el.addEventListener('pointerleave', () => document.body.classList.remove('is-hovering'));
+  });
+  if (fine && !reduce) document.querySelectorAll('[data-magnet]').forEach(b => {
+    b.addEventListener('pointermove', e => { const r = b.getBoundingClientRect(); const x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2); b.style.transform = `translate(${x * .18}px, ${y * .28}px)`; });
+    b.addEventListener('pointerleave', () => { b.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)'; b.style.transform = ''; setTimeout(() => b.style.transition = '', 600); });
+  });
+  const nav = document.getElementById('nav'); const onScroll = () => nav.classList.toggle('scrolled', scrollY > 24);
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .15 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const appTyped = document.getElementById('appTyped'), badge = document.getElementById('appBadge');
+  const QUERIES = [['"--ar 1:1" ', 3], ['--niji', 1], ['golden hour', 1], ['village -neon', 1], ['', 6]];
+  (async () => {
+    if (reduce) { appTyped.textContent = '"--ar 16:9" city -neon'; return; }
+    await sleep(1500);
+    for (;;) for (const [q, n] of QUERIES) {
+      for (let i = 1; i <= q.length; i++) { appTyped.textContent = q.slice(0, i); await sleep(60); }
+      badge.textContent = q ? `${n} of 6 match` : '6 images · 6 prompts';
+      await sleep(q ? 2600 : 1800);
+      for (let i = q.length; i >= 0; i -= 2) { appTyped.textContent = q.slice(0, Math.max(0, i)); await sleep(20); }
+    }
+  })();
+})();
+</script>
 </body>
 </html>
