@@ -11,8 +11,11 @@ Static landing page for Spencer Clark's projects, served by Caddy on Railway.
 
 ## Deploy
 
+Pushes to `main` deploy automatically (the GitHub repo is connected to the Railway
+service `web`). To deploy uncommitted local changes instead:
+
 ```
-railway up          # from this folder, after `railway login` and `railway link`
+railway up --service web
 ```
 
 Local preview:
