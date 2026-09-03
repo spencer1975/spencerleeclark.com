@@ -11,10 +11,9 @@
 	@apex host spencerleeclark.com
 	redir @apex https://www.spencerleeclark.com{uri} permanent
 
-	# Once DNS for www.spencerleeclark.com is live, uncomment to send the
-	# Railway-provided hostname to the real domain:
-	# @railway header_regexp Host \.up\.railway\.app$
-	# redir @railway https://www.spencerleeclark.com{uri} permanent
+	# Send the Railway-provided hostname to the real domain.
+	@railway header_regexp Host \.up\.railway\.app$
+	redir @railway https://www.spencerleeclark.com{uri} permanent
 
 	header {
 		X-Content-Type-Options nosniff
