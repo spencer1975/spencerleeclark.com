@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🖼️</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Outfit:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
     --ground: #17151d;
@@ -22,9 +22,9 @@
     --accent-ink: #1d1608;
     --chip: #b7a9e8;
     --chip-bg: #2a2440;
-    --display: "Fraunces", Georgia, serif;
-    --body: "Instrument Sans", system-ui, sans-serif;
-    --mono: "Spline Sans Mono", ui-monospace, monospace;
+    --display: "Outfit", "Nunito", system-ui, sans-serif;
+    --body: "Nunito", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -53,9 +53,9 @@
   }
   .promptbar .slash { color: var(--accent); }
   h1 {
-    font-family: var(--display); font-weight: 600; font-optical-sizing: auto;
+    font-family: var(--display); font-weight: 600;
     font-size: clamp(38px, 7vw, 64px); line-height: 1.05;
-    margin: 0 0 20px; text-wrap: balance; letter-spacing: -0.01em;
+    margin: 0 0 20px; text-wrap: balance; letter-spacing: -0.02em;
   }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 28px; padding: 0; list-style: none; }
   .chips li {
