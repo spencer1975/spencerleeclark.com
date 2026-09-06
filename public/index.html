@@ -277,6 +277,11 @@
   }
   .support::after { content: "☕"; position: absolute; right: -10px; bottom: -40px; font-size: 260px; opacity: .06; transform: rotate(-12deg); pointer-events: none; }
   .support .inner { max-width: 38em; position: relative; }
+  .contact::after { content: "✉"; }
+  .contact .btn { margin: 4px 10px 4px 0; }
+  .contact .addr { font-family: var(--mono); font-size: 14px; margin-top: 8px; }
+  .contact .addr a { color: var(--muted); text-decoration: none; }
+  .contact .addr a:hover { color: var(--text); }
   .support p { color: var(--muted); font-size: 17.5px; }
 
   /* footer */
@@ -327,6 +332,7 @@
       <li><a href="#projects" data-hover>Projects</a></li>
       <li><a href="https://github.com/spencer1975" data-hover>GitHub</a></li>
       <li><a href="https://buymeacoffee.com/spencerleeclark" data-hover>Support</a></li>
+      <li><a href="#contact" data-hover>Contact</a></li>
     </ul>
   </div>
 </nav>
@@ -420,13 +426,27 @@
       </div>
     </div>
   </section>
+  <section id="contact">
+    <div class="wrap">
+      <div class="support contact reveal">
+        <div class="inner">
+          <p class="kicker">Contact</p>
+          <h2>Say hello.</h2>
+          <p>Questions, ideas, a bug you hit, or something you would like built. Email is the fastest way to reach me and I read everything.</p>
+          <p><a class="btn btn-accent" href="mailto:spencerleeclark@gmail.com?subject=Hello%20from%20spencerleeclark.com" data-magnet data-hover>✉ Email me</a>
+          <a class="btn btn-ghost" href="https://github.com/spencer1975" data-magnet data-hover>GitHub issues</a></p>
+          <p class="addr"><a href="mailto:spencerleeclark@gmail.com" data-hover>spencerleeclark@gmail.com</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <footer>
   <p class="big" aria-hidden="true">Spencer Clark</p>
   <div class="wrap">
     <div class="row">
-      <span>© 2026 Spencer Clark</span>
+      <span>© 2026 Spencer Clark · <a href="mailto:spencerleeclark@gmail.com" data-hover>Email</a></span>
       <span><a href="https://github.com/spencer1975" data-hover>GitHub</a> · <a href="https://buymeacoffee.com/spencerleeclark" data-hover>Buy Me a Coffee</a> · <a href="/midjourney-viewer/" data-hover>Midjourney Viewer</a> · <a href="https://quickvoicenote.com/" data-hover>Quick Voice Note</a></span>
     </div>
   </div>
