@@ -3,7 +3,7 @@
 # into public/midjourney-viewer/. The plugin repo is the single source of truth;
 # run this after editing docs/index.html there, then commit and deploy.
 set -euo pipefail
-SRC="${1:-$HOME/Projects/obsidian-midjourney-viewer/docs}"
+SRC="${1:-$HOME/Software Projects/obsidian-midjourney-viewer/docs}"
 DST="$(cd "$(dirname "$0")/.." && pwd)/public/midjourney-viewer"
 [ -f "$SRC/index.html" ] || { echo "no index.html in $SRC" >&2; exit 1; }
 rm -rf "$DST"; mkdir -p "$DST"

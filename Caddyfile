@@ -4,10 +4,32 @@
 }
 
 :{$PORT:8080} {
+	# Default root (the personal site); the quickvoicenote.com block overrides it.
+	# Also what handle_errors uses to find 404.html.
 	root * /srv
 	encode zstd gzip
 
-	# Canonical host: everything lands on www.
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# ---- quickvoicenote.com — its own site, served from the synced landing
+	# page folder (tools/sync-quick-voice-note.sh). Canonical host is the apex.
+	@qvnwww host www.quickvoicenote.com
+	redir @qvnwww https://quickvoicenote.com{uri} permanent
+
+	@qvn host quickvoicenote.com
+	handle @qvn {
+		root * /srv/quick-voice-note
+		header /img/* Cache-Control "public, max-age=604800"
+		header /field-record.shortcut Content-Type "application/octet-stream"
+		try_files {path} {path}.html
+		file_server
+	}
+
+	# ---- spencerleeclark.com — everything else. Canonical host is www.
 	@apex host spencerleeclark.com
 	redir @apex https://www.spencerleeclark.com{uri} permanent
 
@@ -15,16 +37,14 @@
 	@railway header_regexp Host \.up\.railway\.app$
 	redir @railway https://www.spencerleeclark.com{uri} permanent
 
-	header {
-		X-Content-Type-Options nosniff
-		Referrer-Policy strict-origin-when-cross-origin
-		-Server
+	handle {
+		root * /srv
+		header /midjourney-viewer/img/* Cache-Control "public, max-age=604800"
+		header /quick-voice-note/img/* Cache-Control "public, max-age=604800"
+		# Clean URLs: /about -> /about.html
+		try_files {path} {path}.html
+		file_server
 	}
-	header /midjourney-viewer/img/* Cache-Control "public, max-age=604800"
-
-	# Clean URLs: /about -> /about.html; directories redirect to a trailing slash.
-	try_files {path} {path}.html
-	file_server
 
 	handle_errors {
 		@404 expression {http.error.status_code} == 404
